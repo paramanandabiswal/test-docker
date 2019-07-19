@@ -1,8 +1,11 @@
-FROM openjdk:8-windowsservercore
+FROM openjdk:11.0.4-jre-slim
 
-LABEL maintainer="aashishk69@gmail.com"
+LABEL maintainer="Omniwyse.com"
 
-COPY build/libs/test-docker-0.0.1-SNAPSHOT.jar /demo.jar
-EXPOSE 9500
+COPY ./target/test-docker-0.0.1.jar /opt/
 
-CMD ["java", "-jar", "demo.jar"]
+WORKDIR /opt
+
+EXPOSE 8080
+
+CMD ["java", "-jar", "test-docker-0.0.1.jar"]
