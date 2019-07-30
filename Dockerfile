@@ -1,4 +1,4 @@
-FROM openjdk:11.0.4-jre-slim
+FROM openjdk:8-jre-slim
 
 LABEL maintainer="Omniwyse.com"
 
