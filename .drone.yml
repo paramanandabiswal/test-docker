@@ -1,8 +1,17 @@
-pipeline:
-  mynewtask:
-    image: redis
-    commands:
-      - env
-      - echo "hello"
-    when:
-      event: push
+kind: pipeline
+type: docker
+name: default
+
+platform:
+  os: linux
+  arch: arm
+
+steps:
+- name: greeting
+  image: golang:1.12
+  commands:
+  - go build
+  - go test
+trigger:
+  branch:
+  - master
