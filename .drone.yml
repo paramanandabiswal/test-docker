@@ -1,0 +1,122 @@
+kind: pipeline
+name: default
+steps:
+- name: install
+image: node:alpine
+commands:
+- npm ci
+# npm ci first deletes an existing node_modules folder
+# so we load our cache after (cache is inside node_modules).
+- name: cache-load
+image: nexus.admin.sharecare.com/ft-webapp-build-cache
+pull: true
+commands:
+- cp -r /cache/.cache ./node_modules/
+- name: test
+image: node:alpine
+commands:
+- npm run test --silent
+- name: build
+image: node:alpine
+commands:
+- npm run build --silent
+when:
+event: [push]
+- name: docker
+image: nexus.admin.sharecare.com/drone-nexus-docker
+privileged: true
+settings:
+version: echo ${DRONE_COMMIT:0:7}
+when:
+event: [push]
+# Start the image for cypress to test against.
+- name: docker-test-instance
+image: nexus.admin.sharecare.com/${DRONE_REPO_NAME}:${DRONE_COMMIT:0:7}
+environment:
+PORT: 80
+APP: you
+INSTANCE: ft-webapp.sharecare.com
+COOKIE_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+AUTH_API_PASS: x
+detach: true
+when:
+event: [push]
+- name: docker-test-runner
+image: nexus.admin.sharecare.com/docker-cypress
+commands:
+- cypress run --config video=false,baseUrl=http://docker-test-instance --spec=cypress/integration/app-load.test.js
+when:
+event: [push]
+- name: deploy-qa
+image: nexus.admin.sharecare.com/drone-kubernetes-deploy
+settings:
+version: echo ${DRONE_COMMIT:0:7}
+namespace: qa
+when:
+branch: [master]
+event: [push]
+- name: deploy-stage
+image: nexus.admin.sharecare.com/drone-kubernetes-deploy
+settings:
+version: echo ${DRONE_COMMIT:0:7}
+namespace: stage
+when:
+branch: [master]
+event: [push]
+# comment-jira-dev code is in a submodule.
+- name: submodules
+image: docker:git
+commands:
+- git submodule init
+- git submodule update
+when:
+branch:
+exclude: [master, release/*]
+event: [push]
+- name: comment-jira-dev
+image: python:2-alpine
+environment:
+JIRA_TOKEN:
+from_secret: JIRA_TOKEN
+commands:
+- scripts/comment-jira-dev.sh
+when:
+branch:
+exclude: [master, release/*]
+event: [push]
+- name: comment-pr
+image: node:alpine
+environment:
+DANGER_GITHUB_API_TOKEN:
+from_secret: danger_github_api_token
+commands:
+- npx danger ci
+when:
+event: [pull_request]
+# node_modules is in .dockerignore so we have to move it before we
+# can save it into a docker image.
+- name: cache-prepare
+image: alpine
+commands:
+- mkdir -p cache
+- mv Dockerfile.build-cache node_modules/.cache cache/
+when:
+branch: [master]
+event: [push]
+- name: cache-build
+image: nexus.admin.sharecare.com/drone-nexus-docker
+privileged: true
+settings:
+tags:
+- latest
+repo: ft-webapp-build-cache
+dockerfile: cache/Dockerfile.build-cache
+context: cache
+when:
+branch: [master]
+event: [push]
+- name: history
+image: nexus.admin.sharecare.com/drone-build-plugin
+when:
+status: [success, failure]
+event: [push]
